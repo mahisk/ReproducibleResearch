@@ -1,0 +1,159 @@
+---
+title: Exploring the U.S. National Oceanic and Atmospheric Administration's (NOAA)
+  storm database
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Assignment
+
+The basic goal of this assignment is to explore the NOAA Storm Database and answer some basic questions about severe weather events. You must use the database to answer the questions below and show the code for your entire analysis. Your analysis can consist of tables, figures, or other summaries. You may use any R package you want to support your analysis.
+
+## Synopsis
+
+NOAA strom database is used to track major storms and weather events in the United States, including when and where they occur, as well as estimates of any fatalities, injuries, and property damage. In this report we investigate which type of events are the most harmful to population health and have the greatest economic consequences. The events in the database start in the year 1950 and end in November 2011.
+
+**This report will address:**
+
+  * Across the United States, which types of events are most harmful with respect to population health?
+  * Across the United States, which types of events have the greatest economic consequences?
+
+## Data Processing
+
+Download the data file and read the file for further analysis
+
+```{r}
+#load library
+library(plyr)
+library(ggplot2)
+source("multiplot.R")
+
+# Create local data directory
+datadir <- "stromdata"
+if(!dir.exists("stromData")){
+  dir.create("stromdata")
+}
+
+# Download the data file to local folder for processing
+dataurl <- "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2"
+datafile <- paste(datadir,basename(dataurl),sep='/')
+
+if (!file.exists(datafile)) {
+  download.file(dataurl, datafile)
+}
+
+#Read the data file
+stromdata <- read.csv(bzfile(datafile))
+```
+
+Prepare tidy data by filtering only required data from the strom database. We need only columns BGN_DATE, EVTYPE, FATALITIES, INJURIES, PROPDMG, PROPDMGEXP, CROPDMG, and CROPDMGEXP for analysis
+
+```{r}
+#tidy strom data
+tidy_stromdata <- stromdata[,c('BGN_DATE', 'EVTYPE','FATALITIES','INJURIES', 'PROPDMG', 'PROPDMGEXP', 'CROPDMG', 'CROPDMGEXP')]
+```
+
+Convert the exponent data and calculate Property Damage and Crop Damage according to the exponents.
+
+```{r}
+# Replace the exponents for property and crop damage
+# Assumptions:
+# h or H means 10^2
+# k or K means 10^3
+# m or M means 10^6
+# b or B means 10^9
+
+# replace for property damage
+tidy_stromdata$PROPDMGEXP <- as.numeric(as.character(mapvalues(tidy_stromdata$PROPDMGEXP, from=levels(tidy_stromdata$PROPDMGEXP), to=c("0", "0", "0", "0", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "2", "2", "3", "6", "6"))))
+
+# replace for crop damage
+tidy_stromdata$CROPDMGEXP <- as.numeric(as.character(mapvalues(tidy_stromdata$CROPDMGEXP, from=levels(tidy_stromdata$CROPDMGEXP), to=c("0", "0", "0", "2", "9", "3", "3", "6", "6"))))
+
+#calculate the property damage
+tidy_stromdata$PROPDMG <- tidy_stromdata$PROPDMG * 10^tidy_stromdata$PROPDMGEXP
+
+#calculate the crop damage
+tidy_stromdata$CROPDMG <- tidy_stromdata$CROPDMG * 10^tidy_stromdata$CROPDMGEXP
+```
+
+## Results
+
+#### 1. Across the United States, which types of events (as indicated in the EVTYPE variable) are most harmful with respect to population health ?
+
+Plotting the top ten harmful events by number of fatalities and injuries.
+
+```{r}
+# get the sum of all the fatalities based on event type
+fatalities_data <- aggregate(FATALITIES ~ EVTYPE, data=tidy_stromdata, sum)
+#get top 10 records
+fatalities_data <- fatalities_data[order(fatalities_data$FATALITIES, decreasing= T),][1:10,]
+fatalities_data$EVTYPE <- factor(fatalities_data$EVTYPE, levels = fatalities_data$EVTYPE)
+
+#plot top 10 fatalities based on event type
+ ggplot(fatalities_data, aes(x = EVTYPE, y = FATALITIES, fill=FATALITIES)) + 
+     geom_bar(stat = "identity") + 
+     theme(axis.text.x = element_text(angle = 90, hjust = 1)) + 
+     xlab("Event Type") + ylab("Number of Fatalities") + ggtitle("Top 10 No. of Fatalities by Weather Events") + theme(plot.title = element_text(hjust = 0.5)) + scale_fill_gradient("Fatalities", low = "yellow", high = "red")
+```
+
+About plot shows that the Tornado events are most harmful with respect to population health. Tornado caused more fatalities compared to other events.
+
+```{r}
+# get the sum of all the injuries based on event type
+injuries_data <- aggregate(INJURIES ~ EVTYPE, data=tidy_stromdata, sum)
+#get top 10 records
+injuries_data <- injuries_data[order(injuries_data$INJURIES, decreasing= T),][1:10,]
+injuries_data$EVTYPE <- factor(injuries_data$EVTYPE, levels = injuries_data$EVTYPE)
+
+#plot top 10 injuries based on event type
+ ggplot(injuries_data, aes(x = EVTYPE, y = INJURIES, fill=INJURIES)) + 
+      geom_bar(stat = "identity") + 
+      theme(axis.text.x = element_text(angle = 90, hjust = 1)) + 
+      xlab("Event Type") + ylab("Number of Injuries") + ggtitle("Top 10 Injuries by Weather Events") + theme(plot.title = element_text(hjust = 0.5)) + scale_fill_gradient("Injuries", low = "yellow", high = "red")
+```
+
+About plot shows that the Tornado events are most harmful with respect to population health. Tornado caused more injuries compared to other events.
+
+#### 2.Across the United States, which types of events have the greatest economic consequences?
+
+Property and crop damage have economic consequences. There are multiple events which have the greatest economic consequences.
+
+```{r}
+# get the sum of all the property damage based on event type
+propertydamage_data <- aggregate(PROPDMG ~ EVTYPE, data=tidy_stromdata, sum)
+#get top 10 records
+propertydamage_data <- propertydamage_data[order(propertydamage_data$PROPDMG, decreasing= T),][1:10,]
+propertydamage_data$EVTYPE <- factor(propertydamage_data$EVTYPE, levels = propertydamage_data$EVTYPE)
+
+# get the sum of all the crop damage based on event type
+cropdamage_data <- aggregate(CROPDMG ~ EVTYPE, data=tidy_stromdata, sum)
+#get top 10 records
+cropdamage_data <- cropdamage_data[order(cropdamage_data$CROPDMG, decreasing= T),][1:10,]
+cropdamage_data$EVTYPE <- factor(cropdamage_data$EVTYPE, levels = cropdamage_data$EVTYPE)
+
+#plot top 10 damges based on event type
+
+#Property Damage
+ propdmgplot <- ggplot(propertydamage_data, aes(x = EVTYPE, y = PROPDMG, fill=PROPDMG)) + 
+     geom_bar(stat = "identity") + 
+     theme(axis.text.x = element_text(angle = 90, hjust = 1)) + 
+     xlab("Event Type") + ylab("Property damage (in $)") + scale_fill_gradient("USD$", low = "yellow", high = "red") + ggtitle("Top 10 Damage caused \n by Weather Events")
+ 
+#Crop Damage
+cropdmgplot <- ggplot(cropdamage_data, aes(x = EVTYPE, y = CROPDMG, fill=CROPDMG)) + 
+     geom_bar(stat = "identity") + 
+     theme(axis.text.x = element_text(angle = 90, hjust = 1)) + 
+     xlab("Event Type") + ylab("Crop damage (in $)") + scale_fill_gradient("USD$", low = "yellow", high = "red") + ggtitle("Top 10 Damage caused \n by Weather Events")
+
+#Plot
+multiplot(propdmgplot, cropdmgplot, cols=2)
+```
+
+## Conclusion
+The events that are most harmful with respect to population health are Tronado, Flood, Heat and Wind. Tornado events are most harmful with respect to population health.
+The events that have caused the most property and crop damage in the United states from an economic stand point are Flood, Hurricane and Drought. Greatest economic consequences for crops is a drougth event and for properties it is bacause of floods.
